@@ -1,6 +1,9 @@
 @prefix fuseki: <http://jena.apache.org/fuseki#> .
 @prefix ja: <http://jena.hpl.hp.com/2005/11/Assembler#> .
 
+# curl --get --data-urlencode 'query=SELECT (COUNT(*) AS ?triples) WHERE { ?s ?p ?o }' \
+#   -H 'Accept: application/sparql-results+json' http://localhost:3030/directory/sparql
+
 <#service> a fuseki:Service ;
     fuseki:name "directory" ;
     fuseki:endpoint [ fuseki:operation fuseki:query ; fuseki:name "sparql" ] ;
