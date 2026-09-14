@@ -1,0 +1,12 @@
+# Copy to compose.yml in your instance repository and set the application name.
+services:
+  api:
+    image: ghcr.io/foederierter-datenpool/directory-api:main
+    pull_policy: always
+    environment:
+      SPRING_APPLICATION_NAME: example-directory-api
+    mem_limit: 512m
+    restart: unless-stopped
+    # Uncomment to access the API locally on port 18080.
+    # ports:
+    #   - "127.0.0.1:18080:8080"
