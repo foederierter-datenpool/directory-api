@@ -9,8 +9,10 @@ services:
       pull: true
       args:
         DIRECTORY_SOURCE_URL: https://example.org/data/directory.ttl
+        FEDERATION_SOURCE_URL: https://example.org/config/federation.ttl
     environment:
       SPRING_APPLICATION_NAME: example-directory-api
+      DIRECTORY_API_SPARQL_URL: http://fuseki:3030/directory/sparql
     mem_limit: 512m
     restart: unless-stopped
     # Uncomment to access the API locally on port 18080.

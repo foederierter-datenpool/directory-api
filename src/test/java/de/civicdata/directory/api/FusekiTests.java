@@ -29,6 +29,8 @@ class FusekiTests {
         var config = Path.of("fuseki.ttl").toAbsolutePath().toString();
         Files.writeString(work.resolve("directory.ttl"), "<urn:service> <urn:name> \"Beratung\" .\n");
 
+        Files.writeString(work.resolve("federation.ttl"), "# No target schemas in this fixture\n");
+
         int port;
         try (var socket = new ServerSocket(0)) {
             port = socket.getLocalPort();
