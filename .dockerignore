@@ -2,6 +2,7 @@
 !gradlew
 !build.gradle
 !settings.gradle
+!fuseki.ttl
 !gradle/
 !gradle/**
 !src/

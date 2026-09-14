@@ -16,16 +16,25 @@ repositories {
     mavenCentral()
 }
 
+// Keep Fuseki's standalone server separate from Spring Boot's dependencies.
+configurations {
+    fuseki
+}
+
 dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1'
     testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    fuseki 'org.apache.jena:jena-fuseki-server:6.2.0'
 }
 
 tasks.named('test') {
     useJUnitPlatform()
+    dependsOn 'fusekiDist'
+    inputs.file('fuseki.ttl')
+    inputs.files(configurations.fuseki)
 }
 
 tasks.named('bootJar') {
@@ -34,4 +43,14 @@ tasks.named('bootJar') {
 
 tasks.named('jar') {
     enabled = false
+}
+
+tasks.register('fusekiDist', Sync) {
+    from configurations.fuseki
+    into layout.buildDirectory.dir('fuseki')
+    rename { 'fuseki-server.jar' }
+}
+
+tasks.named('assemble') {
+    dependsOn 'fusekiDist'
 }

@@ -21,6 +21,7 @@ public class DirectoryController {
         this.directory = new FileSystemResource(file);
     }
 
+    // curl --output directory.ttl http://localhost:8080/directory.ttl
     @Operation(summary = "Download the published directory",
             description = "Downloads the Turtle snapshot included in this deployment.")
     @ApiResponse(responseCode = "200", description = "directory.ttl download",

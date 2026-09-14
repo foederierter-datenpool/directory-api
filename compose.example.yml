@@ -1,6 +1,8 @@
 # Copy this and Dockerfile.example to compose.yml and Dockerfile in your instance.
 services:
   api:
+    image: &directory-image example-directory-api:local
+    pull_policy: never
     build:
       context: .
       no_cache: true
@@ -14,3 +16,15 @@ services:
     # Uncomment to access the API locally on port 18080.
     # ports:
     #   - "127.0.0.1:18080:8080"
+
+  fuseki:
+    image: *directory-image
+    pull_policy: never
+    entrypoint: ["java", "-cp", "/app/fuseki-server.jar", "org.apache.jena.fuseki.main.cmds.FusekiMainCmd"]
+    command: ["--config=/app/fuseki.ttl"]
+    mem_limit: 512m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:3030/directory/sparql?query=ASK%7B%7D"]
+    # ports:
+    #   - "127.0.0.1:3030:3030"
