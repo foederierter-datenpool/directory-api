@@ -1,37 +1,45 @@
 # Directory API
 
-A generic Spring Boot service. Currently serves `/hello` and health endpoints;
-RDF loading, data routes and Fuseki come later.
+A generic Spring Boot service with a Turtle download and interactive API documentation.
 
-Copy [compose.example.yml](compose.example.yml) to `compose.yml` in your instance
-repository and set `SPRING_APPLICATION_NAME`.
+- `/directory.ttl` streams the deployment's local Turtle snapshot.
+- `/swagger-ui.html` opens Swagger UI, including **Try it out**.
+- `/v3/api-docs` serves the OpenAPI description (also `/v3/api-docs.yaml`).
+
+## Configure an instance
+
+Copy [compose.example.yml](compose.example.yml) and [Dockerfile.example](Dockerfile.example)
+into your instance repository as `compose.yml` and `Dockerfile`. Set
+`DIRECTORY_SOURCE_URL` under build arguments and `SPRING_APPLICATION_NAME` under environment.
+
+The instance build takes the published API image and downloads the Turtle file
+into `/app/directory.ttl`. Failed or empty downloads fail the build. Each build
+fetches the source again; restarting a container keeps its existing snapshot.
+No Java compilation happens in the instance build.
+
+The API only reads the local file, streaming it without loading it all into memory.
+A missing or unreadable snapshot returns 503. RDF parsing and Fuseki come later.
 
 ## Local development
 
-Requires JDK 25:
+Requires JDK 25 and a pipeline output file:
 
 ```sh
 ./gradlew build
-java -jar build/libs/directory-api.jar
+java -jar build/libs/directory-api.jar --directory.api.file=/absolute/path/to/directory.ttl
 ```
 
-Check `http://localhost:8080/hello` and `/actuator/health/readiness`.
-For Docker, including local builds on a Mac:
-
-```sh
-docker build -t directory-api:local .
-docker run --rm -p 127.0.0.1:18080:8080 --memory=512m directory-api:local
-```
+Open `http://localhost:8080/swagger-ui.html`. The default file is `./directory.ttl`;
+`DIRECTORY_API_FILE` can override it in a container.
 
 ## Image publication
 
 Pushes to `main` build, test and publish the amd64 image to
 `ghcr.io/foederierter-datenpool/directory-api`, tagged `main` and
 `sha-<full-commit-sha>`. Pull requests test without publishing. The workflow uses
-GitHub's automatic token. After the first publication, make the container package
-**Public** in GitHub's package settings to allow pulls without credentials.
+GitHub's automatic token. Make the container package **Public** after its first publication.
 
-Instance Compose files select the image and configuration. `:main` follows new
-builds on redeployment; pin a digest for repeatable deployments or rollback.
-Publishing an image does not deploy it automatically. The 512 MiB example budget
-is for hello-world, not future RDF workloads.
+This generic image contains no instance data. Rebuild your instance after publishing
+API changes or new pipeline output. To fix the API version, set the `API_IMAGE`
+build argument to an image digest. The 512 MiB example limit does not account for
+future RDF query workloads.

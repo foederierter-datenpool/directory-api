@@ -1,8 +1,12 @@
-# Copy to compose.yml in your instance repository and set the application name.
+# Copy this and Dockerfile.example to compose.yml and Dockerfile in your instance.
 services:
   api:
-    image: ghcr.io/foederierter-datenpool/directory-api:main
-    pull_policy: always
+    build:
+      context: .
+      no_cache: true
+      pull: true
+      args:
+        DIRECTORY_SOURCE_URL: https://example.org/data/directory.ttl
     environment:
       SPRING_APPLICATION_NAME: example-directory-api
     mem_limit: 512m

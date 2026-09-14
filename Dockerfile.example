@@ -1,0 +1,5 @@
+ARG API_IMAGE=ghcr.io/foederierter-datenpool/directory-api:main
+FROM ${API_IMAGE}
+ARG DIRECTORY_SOURCE_URL
+ADD --chmod=644 ${DIRECTORY_SOURCE_URL} /app/directory.ttl
+RUN test -s /app/directory.ttl
