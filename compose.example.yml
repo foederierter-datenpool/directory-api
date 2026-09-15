@@ -8,7 +8,7 @@ services:
       no_cache: true
       pull: true
       args:
-        SNAPSHOT_URL: https://codeload.github.com/YOUR-ORG/YOUR-REPO/tar.gz/refs/heads/gh-pages
+        SNAPSHOT_URL: https://codeload.github.com/YOUR-ORG/YOUR-REPO/tar.gz/refs/heads/pipeline-data
     environment:
       SPRING_APPLICATION_NAME: example-directory-api
       DIRECTORY_API_FILE: /app/snapshot/data/directory.ttl
