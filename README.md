@@ -12,28 +12,34 @@ A Spring Boot API and a separate Apache Jena Fuseki process, packaged in one ima
 ## Configure an instance
 
 Copy [compose.example.yml](compose.example.yml) and [Dockerfile.example](Dockerfile.example)
-into your instance repository as `compose.yml` and `Dockerfile`. Set
-`DIRECTORY_SOURCE_URL`, `FEDERATION_SOURCE_URL`, the local image name and
-`SPRING_APPLICATION_NAME` for your instance. Both source URLs should refer to the
-same published pipeline snapshot.
+into your instance as `compose.yml` and `Dockerfile`. Set the `SNAPSHOT_URL` build
+argument, image name and `SPRING_APPLICATION_NAME` in Compose. The URL points to a
+GitHub publication branch's tar.gz archive (or an immutable commit's archive).
 
-The instance build takes the published API image and downloads the Turtle file
-into `/app/directory.ttl` and its configuration into `/app/federation.ttl`.
-Failed or empty downloads fail the build. Compose starts
-API and Fuseki containers from that same image. Fuseki loads the bundled Turtle
-into memory at startup. Rebuild to refresh both; restarting reloads the same snapshot.
+The instance build unpacks that archive into `/app/snapshot`. API and Fuseki use
+those same files. Set `DIRECTORY_API_FILE=/app/snapshot/data/directory.ttl` for the
+API download. Rebuild to refresh the data; restarting reuses the image's snapshot.
 
-The download streams the local file; collection calls query Fuseki over HTTP.
-A missing or unreadable snapshot returns 503. Fuseki exposes read-only queries with
-a 30-second timeout; outbound SERVICE calls and updates are disabled. The API
-container can reach it at `http://fuseki:3030/directory/sparql`.
-Additional Turtle files and named graphs can be declared in `fuseki.ttl` without Java code.
+Both Compose and local execution run the same Java launcher, `directory-fuseki.jar`.
+At startup it loads Turtle files
+from `config/`, `data/`, `webapp/content/` and `webapp/exporters/` in place. It excludes
+raw, lifted, extracted and preparation artifacts, hidden files and symlinks. Missing
+optional directories are fine; spaces in graph names are URL-encoded.
+
+Only `data/directory.ttl` populates the default graph. Other included files become
+named graphs with uniform names: `data/pipeline/merged.ttl` becomes
+`urn:directory:data/pipeline/merged.ttl`. Graph names stay stable across restarts.
+List populated graphs with `SELECT DISTINCT ?graph WHERE { GRAPH ?graph { ?s ?p ?o } }`.
+
+Fuseki exposes read-only queries with a 30-second timeout; outbound SERVICE calls
+and updates are disabled. Invalid Turtle prevents startup. The REST API queries it
+at `http://fuseki:3030/directory/sparql` in Compose.
 
 ## Collection responses
 
 The API reads the federation's `hasTargetSchema`, `targetClass`, `hasTargetField`
 and mapping relationships from `federation.ttl`, loaded in the named graph
-`urn:directory:config`. The default graph remains the directory data. Collection IDs
+`urn:directory:config/federation.ttl`. The default graph remains the directory data. Collection IDs
 are the schema IRI's final segment (which must be unique); `hiddenByDefault` does not
 hide a collection. No instance-specific Java classes or second schema definition are needed.
 
@@ -64,25 +70,25 @@ are not implemented yet; Swagger documents the available calls.
 
 ## Local development
 
-Requires JDK 25 and a pipeline output file:
+Requires JDK 25 and local pipeline output. From this repository:
 
 ```sh
 ./gradlew build
-java -jar build/libs/directory-api.jar --directory.api.file=/absolute/path/to/directory.ttl
+java -jar build/fuseki/directory-fuseki.jar ../sosuse-directory-builder
 ```
 
-Open `http://localhost:8080/swagger-ui.html`. The default file is `./directory.ttl`;
-`DIRECTORY_API_FILE` can override it in a container.
+The endpoint is `http://localhost:3030/directory/sparql`. Ctrl+C stops Fuseki.
+Data stays in the instance directory; restart after a pipeline run to load its new
+output. Append `3031` to use another port.
 
-To run Fuseki without Docker, place `directory.ttl` and `federation.ttl` in this directory and start it
-in its own terminal (after `./gradlew build`):
+To start the REST API in another terminal:
 
 ```sh
-java -cp build/fuseki/fuseki-server.jar org.apache.jena.fuseki.main.cmds.FusekiMainCmd --config=fuseki.ttl
+java -jar build/libs/directory-api.jar --directory.api.file=../sosuse-directory-builder/data/directory.ttl
 ```
 
-The API defaults to `http://localhost:3030/directory/sparql`; the Compose example
-sets `DIRECTORY_API_SPARQL_URL` to the internal `fuseki` hostname.
+Open `http://localhost:8080/swagger-ui.html`. The API defaults to the local Fuseki
+endpoint. Its download defaults to `./directory.ttl` unless overridden as above.
 
 ```sh
 curl --get --data-urlencode 'query=SELECT (COUNT(*) AS ?triples) WHERE { ?s ?p ?o }' \

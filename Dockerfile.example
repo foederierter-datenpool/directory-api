@@ -1,7 +1,11 @@
 ARG API_IMAGE=ghcr.io/foederierter-datenpool/directory-api:main
 FROM ${API_IMAGE}
-ARG DIRECTORY_SOURCE_URL
-ADD --chmod=644 ${DIRECTORY_SOURCE_URL} /app/directory.ttl
-ARG FEDERATION_SOURCE_URL
-ADD --chmod=644 ${FEDERATION_SOURCE_URL} /app/federation.ttl
-RUN test -s /app/directory.ttl && test -s /app/federation.ttl
+ARG SNAPSHOT_URL
+ADD ${SNAPSHOT_URL} /tmp/snapshot.tar.gz
+USER root
+RUN mkdir -p /app/snapshot \
+    && tar -xzf /tmp/snapshot.tar.gz --strip-components=1 -C /app/snapshot \
+    && rm /tmp/snapshot.tar.gz \
+    && test -s /app/snapshot/data/directory.ttl \
+    && test -s /app/snapshot/config/federation.ttl
+USER app

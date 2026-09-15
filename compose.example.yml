@@ -1,4 +1,4 @@
-# Copy this and Dockerfile.example to compose.yml and Dockerfile in your instance.
+# Copy this and Dockerfile.example into your instance as compose.yml and Dockerfile.
 services:
   api:
     image: &directory-image example-directory-api:local
@@ -8,10 +8,10 @@ services:
       no_cache: true
       pull: true
       args:
-        DIRECTORY_SOURCE_URL: https://example.org/data/directory.ttl
-        FEDERATION_SOURCE_URL: https://example.org/config/federation.ttl
+        SNAPSHOT_URL: https://codeload.github.com/YOUR-ORG/YOUR-REPO/tar.gz/refs/heads/gh-pages
     environment:
       SPRING_APPLICATION_NAME: example-directory-api
+      DIRECTORY_API_FILE: /app/snapshot/data/directory.ttl
       DIRECTORY_API_SPARQL_URL: http://fuseki:3030/directory/sparql
     mem_limit: 512m
     restart: unless-stopped
@@ -22,8 +22,8 @@ services:
   fuseki:
     image: *directory-image
     pull_policy: never
-    entrypoint: ["java", "-cp", "/app/fuseki-server.jar", "org.apache.jena.fuseki.main.cmds.FusekiMainCmd"]
-    command: ["--config=/app/fuseki.ttl"]
+    entrypoint: ["java", "-jar", "/app/fuseki/directory-fuseki.jar"]
+    command: ["/app/snapshot"]
     mem_limit: 512m
     restart: unless-stopped
     healthcheck:

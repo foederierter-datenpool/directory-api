@@ -1,6 +1,6 @@
 FROM --platform=$BUILDPLATFORM eclipse-temurin:25-jdk AS build
 WORKDIR /build
-COPY gradlew build.gradle settings.gradle fuseki.ttl ./
+COPY gradlew build.gradle settings.gradle ./
 COPY gradle/ gradle/
 COPY src/ src/
 RUN ./gradlew build --no-daemon --max-workers=2
@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
 
 WORKDIR /app
 COPY --from=build /build/build/libs/directory-api.jar ./app.jar
-COPY --from=build /build/build/fuseki/fuseki-server.jar /build/fuseki.ttl ./
+COPY --from=build /build/build/fuseki/ ./fuseki/
 USER app
 EXPOSE 8080 3030
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \

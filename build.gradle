@@ -17,8 +17,13 @@ repositories {
 }
 
 // Keep Fuseki's standalone server separate from Spring Boot's dependencies.
-configurations {
+sourceSets {
     fuseki
+}
+
+// In-process tests use Fuseki's bundled Log4j rather than Spring's logging bridge.
+configurations.testRuntimeClasspath {
+    exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
 }
 
 dependencies {
@@ -27,14 +32,13 @@ dependencies {
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1'
     testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-    fuseki 'org.apache.jena:jena-fuseki-server:6.2.0'
+    fusekiImplementation 'org.apache.jena:jena-fuseki-server:6.2.0'
+    testImplementation sourceSets.fuseki.output
+    testImplementation files(configurations.fusekiRuntimeClasspath)
 }
 
 tasks.named('test') {
     useJUnitPlatform()
-    dependsOn 'fusekiDist'
-    inputs.file('fuseki.ttl')
-    inputs.files(configurations.fuseki)
 }
 
 tasks.named('bootJar') {
@@ -45,10 +49,19 @@ tasks.named('jar') {
     enabled = false
 }
 
+tasks.register('fusekiJar', Jar) {
+    archiveFileName = 'directory-fuseki.jar'
+    from sourceSets.fuseki.output
+    manifest.attributes 'Main-Class': 'de.civicdata.directory.fuseki.DirectoryFuseki'
+    doFirst {
+        manifest.attributes 'Class-Path': configurations.fusekiRuntimeClasspath.collect { it.name }.join(' ')
+    }
+}
+
 tasks.register('fusekiDist', Sync) {
-    from configurations.fuseki
+    from tasks.named('fusekiJar')
+    from configurations.fusekiRuntimeClasspath
     into layout.buildDirectory.dir('fuseki')
-    rename { 'fuseki-server.jar' }
 }
 
 tasks.named('assemble') {

@@ -13,7 +13,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Base64;
-import java.util.concurrent.TimeUnit;
+import de.civicdata.directory.fuseki.DirectoryFuseki;
+import org.apache.jena.fuseki.main.FusekiServer;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -29,13 +30,15 @@ import tools.jackson.databind.json.JsonMapper;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class CollectionsTests {
     @TempDir static Path work;
-    private static Process fuseki;
+    private static FusekiServer fuseki;
     private static final JsonMapper JSON = JsonMapper.builder().build();
     @LocalServerPort int port;
 
     @DynamicPropertySource
     static void startFuseki(DynamicPropertyRegistry properties) throws Exception {
-        Files.writeString(work.resolve("federation.ttl"), """
+        Files.createDirectories(work.resolve("config"));
+        Files.createDirectories(work.resolve("data"));
+        Files.writeString(work.resolve("config/federation.ttl"), """
                 @prefix cdp: <https://civic-data.de/pipeline#> .
                 @prefix ex: <https://example.org/> .
                 @prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
@@ -51,7 +54,7 @@ class CollectionsTests {
                 ex:noteField cdp:targetPredicate ex:note .
                 ex:mapping cdp:toTarget ex:books ; cdp:hasRelationship [cdp:toTargetField ex:writerField ; cdp:toTargetSchema ex:writers] .
                 """);
-        Files.writeString(work.resolve("directory.ttl"), """
+        Files.writeString(work.resolve("data/directory.ttl"), """
                 @prefix ex: <https://example.org/> .
                 ex:a a ex:Book ; ex:name "Hello"@en, "Hallo"@de, "Plain" ; ex:number 7 ;
                   ex:writer ex:author ; <https://other.example/name> "Other name" ; ex:note [ex:name "Blank node"] .
@@ -59,40 +62,15 @@ class CollectionsTests {
                 <https://other.example/a> a ex:Book ; ex:name "Same local ID, different IRI" .
                 ex:author a ex:Writer ; ex:name "Ada" .
                 """);
-        int port;
-        try (var socket = new ServerSocket(0)) { port = socket.getLocalPort(); }
-        var jar = Path.of("build/fuseki/fuseki-server.jar").toAbsolutePath().toString();
-        var config = Path.of("fuseki.ttl").toAbsolutePath().toString();
-        fuseki = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin", "java").toString(),
-                "-cp", jar, "org.apache.jena.fuseki.main.cmds.FusekiMainCmd", "--config=" + config, "--port=" + port)
-                .directory(work.toFile()).redirectErrorStream(true).redirectOutput(work.resolve("fuseki.log").toFile()).start();
-        String endpoint = "http://localhost:" + port + "/directory/sparql";
-        try (var client = HttpClient.newHttpClient()) {
-            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
-            boolean ready = false;
-            while (fuseki.isAlive() && System.nanoTime() < deadline) {
-                try {
-                    ready = client.send(HttpRequest.newBuilder(URI.create(endpoint + "?query=ASK%7B%7D"))
-                            .timeout(Duration.ofSeconds(1)).build(), HttpResponse.BodyHandlers.discarding()).statusCode() == 200;
-                    if (ready) break;
-                } catch (java.io.IOException ignored) {}
-                Thread.sleep(100);
-            }
-            assertThat(ready).withFailMessage(Files.readString(work.resolve("fuseki.log"))).isTrue();
-        } catch (Exception | AssertionError error) {
-            stopFuseki();
-            throw error;
-        }
+        fuseki = DirectoryFuseki.serve(work, 0).start();
+        String endpoint = "http://localhost:" + fuseki.getPort() + "/directory/sparql";
         properties.add("directory.api.sparql-url", () -> endpoint);
-        properties.add("directory.api.file", () -> work.resolve("directory.ttl").toString());
+        properties.add("directory.api.file", () -> work.resolve("data/directory.ttl").toString());
     }
 
     @AfterAll
-    static void stopFuseki() throws Exception {
-        if (fuseki != null) {
-            fuseki.destroy();
-            if (!fuseki.waitFor(5, TimeUnit.SECONDS)) fuseki.destroyForcibly().waitFor();
-        }
+    static void stopFuseki() {
+        if (fuseki != null) fuseki.stop();
     }
 
     @Test

@@ -32,7 +32,7 @@ class DirectoryCollections {
                 PREFIX cdp: <https://civic-data.de/pipeline#>
                 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
                 SELECT DISTINCT ?schema ?type ?label ?predicate ?target WHERE {
-                  GRAPH <urn:directory:config> {
+                  GRAPH <urn:directory:config/federation.ttl> {
                     ?federation a cdp:Federation ; cdp:hasTargetSchema ?schema .
                     ?schema a cdp:TargetSchema ; cdp:targetClass ?type .
                     OPTIONAL { ?schema rdfs:label ?label }
