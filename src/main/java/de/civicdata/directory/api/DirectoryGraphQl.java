@@ -15,8 +15,12 @@ import graphql.analysis.MaxQueryDepthInstrumentation;
 import graphql.schema.GraphQLCodeRegistry;
 import graphql.schema.DataFetcher;
 import graphql.schema.GraphQLSchema;
+import graphql.schema.GraphQLObjectType;
+import graphql.schema.GraphQLScalarType;
 import graphql.schema.GraphQLType;
+import graphql.schema.GraphQLTypeUtil;
 import graphql.schema.GraphQLUnionType;
+import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -26,20 +30,44 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.dataloader.DataLoader;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.graphql.execution.BatchLoaderRegistry;
 import org.springframework.graphql.execution.DataFetcherExceptionResolver;
 import org.springframework.graphql.execution.ErrorType;
 import org.springframework.graphql.execution.GraphQlSource;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.function.RouterFunction;
+import org.springframework.web.servlet.function.RouterFunctions;
+import org.springframework.web.servlet.function.ServerResponse;
 import reactor.core.publisher.Flux;
+import tools.jackson.databind.json.JsonMapper;
 
 @Configuration(proxyBeanMethods = false)
 class DirectoryGraphQl {
     record Entity(String collection, String id) {}
+
+    @Bean
+    RouterFunction<ServerResponse> graphiQl(GraphQlSource source) throws IOException {
+        String query = "{\n" + source.schema().getQueryType().getFieldDefinitions().stream().map(field -> {
+            var type = (GraphQLObjectType) GraphQLTypeUtil.unwrapAll(field.getType());
+            var name = type.getFieldDefinition("name");
+            String selection = name != null && GraphQLTypeUtil.unwrapAll(name.getType()) instanceof GraphQLScalarType
+                    ? "id name" : "id";
+            return "  " + field.getName() + "(limit: 3) { " + selection + " }";
+        }).collect(Collectors.joining("\n")) + "\n}";
+        // Reuse Spring's stock UI; only add the initial query, optionally supplied by a documentation link.
+        String html = new ClassPathResource("graphiql/index.html").getContentAsString(StandardCharsets.UTF_8)
+                .replace("fetcher: gqlFetcher,", "initialQuery: params.get(\"query\") || "
+                        + JsonMapper.builder().build().writeValueAsString(query) + ",\n                fetcher: gqlFetcher,");
+        return RouterFunctions.route().GET("/graphiql",
+                request -> ServerResponse.ok().contentType(MediaType.TEXT_HTML).body(html)).build();
+    }
 
     @Bean
     GraphQlSource graphQlSource(DirectoryCollections directory, BatchLoaderRegistry batches) {

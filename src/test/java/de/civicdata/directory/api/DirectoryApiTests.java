@@ -151,11 +151,19 @@ class DirectoryApiTests {
         assertThat(schema.path("mutationType").isNull()).isTrue();
         assertThat(schema.path("subscriptionType").isNull()).isTrue();
         assertThat(schema.toString()).contains("Entity_books", "Entity_writers", "Targets_books_writer");
-        var redirect = get("/graphiql");
-        assertThat(redirect.statusCode()).isEqualTo(307);
-        var ui = get(redirect.headers().firstValue("location").orElseThrow());
+        var ui = get("/graphiql");
         assertThat(ui.statusCode()).isEqualTo(200);
         assertThat(ui.body()).contains("GraphiQL");
+        String marker = "initialQuery: params.get(\"query\") || ";
+        assertThat(ui.body()).contains(marker);
+        String encoded = ui.body().substring(ui.body().indexOf(marker) + marker.length()).split(",\\n", 2)[0];
+        String initialQuery = JSON.readValue(encoded, String.class);
+        var example = graphql(initialQuery, Map.of());
+        assertThat(example.has("errors")).withFailMessage(example.toString()).isFalse();
+        assertThat(example.path("data").path("books").size()).isEqualTo(3);
+        var queryLink = get("/graphiql?query=%7Bbooks%7Bid%7D%7D");
+        assertThat(queryLink.statusCode()).isEqualTo(200);
+        assertThat(queryLink.body()).isEqualTo(ui.body());
     }
 
     @Test
