@@ -13,6 +13,9 @@ services:
       SPRING_APPLICATION_NAME: example-directory-api
       DIRECTORY_API_FILE: /app/snapshot/data/directory.ttl
       DIRECTORY_API_SPARQL_URL: http://fuseki:3030/directory/sparql
+    depends_on:
+      fuseki:
+        condition: service_healthy
     mem_limit: 512m
     restart: unless-stopped
     # Uncomment to access the API locally on port 18080.

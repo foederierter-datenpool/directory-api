@@ -84,11 +84,7 @@ class DirectoryCollections {
         }
         var collections = collections();
         var collection = find(collections, id);
-        var rows = sparql.select("SELECT DISTINCT ?entity WHERE { BIND(IRI(" + sparql.string(collection.type())
-                + ") AS ?type) ?entity a ?type . FILTER(isIRI(?entity)) } ORDER BY STR(?entity) LIMIT "
-                + (limit + 1) + " OFFSET " + offset);
-        var iris = new ArrayList<String>();
-        for (var row : rows) iris.add(value(row, "entity"));
+        var iris = entityIris(collection, null, limit + 1, offset);
         String next = iris.size() > limit ? collection.items() + "?limit=" + limit + "&offset=" + ((long) offset + limit) : null;
         return new ItemPage(readItems(collection, iris.subList(0, Math.min(iris.size(), limit)), collections), limit, offset, next);
     }
@@ -103,13 +99,23 @@ class DirectoryCollections {
         }
         var collections = collections();
         var collection = find(collections, collectionId);
-        var rows = sparql.select("SELECT ?entity WHERE { BIND(IRI(" + sparql.string(iri) + ") AS ?entity) "
-                + "BIND(IRI(" + sparql.string(collection.type()) + ") AS ?type) ?entity a ?type } LIMIT 1");
-        if (rows.isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Item not found in this collection");
+        if (entityIris(collection, iri, 1, 0).isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Item not found in this collection");
+        }
         return readItems(collection, List.of(iri), collections).getFirst();
     }
 
-    private List<Item> readItems(CollectionInfo collection, List<String> iris, List<CollectionInfo> collections) {
+    List<String> entityIris(CollectionInfo collection, String iri, int limit, int offset) {
+        String bind = iri == null ? "" : "BIND(IRI(" + sparql.string(iri) + ") AS ?entity) ";
+        var rows = sparql.select("SELECT DISTINCT ?entity WHERE { " + bind + "BIND(IRI(" + sparql.string(collection.type())
+                + ") AS ?type) ?entity a ?type . FILTER(isIRI(?entity)) } ORDER BY STR(?entity) LIMIT "
+                + limit + " OFFSET " + offset);
+        var iris = new ArrayList<String>();
+        for (var row : rows) iris.add(value(row, "entity"));
+        return iris;
+    }
+
+    List<Item> readItems(CollectionInfo collection, List<String> iris, List<CollectionInfo> collections) {
         var items = new LinkedHashMap<String, Map<String, Map<JsonNode, Set<Link>>>>();
         iris.forEach(iri -> items.put(iri, new TreeMap<>()));
         if (!iris.isEmpty() && !collection.fields().isEmpty()) {

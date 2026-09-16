@@ -1,6 +1,6 @@
 # Directory API
 
-A Spring Boot API and a separate Apache Jena Fuseki process, packaged in one image.
+A Spring Boot REST/GraphQL API and a separate Apache Jena Fuseki process, packaged in one image.
 
 - `/directory.ttl` streams the deployment's local Turtle snapshot.
 - `/collections` discovers target schemas; `/collections/{collection}` describes their fields and relationships.
@@ -8,6 +8,7 @@ A Spring Boot API and a separate Apache Jena Fuseki process, packaged in one ima
 - `/swagger-ui.html` opens Swagger UI, including **Try it out**.
 - `/v3/api-docs` serves the OpenAPI description (also `/v3/api-docs.yaml`).
 - Fuseki serves `/directory/sparql` on port 3030: SELECT/ASK results and CONSTRUCT/DESCRIBE RDF.
+- `/graphql` serves read-only GraphQL on the API's port 8080; `/graphiql` opens the query editor.
 
 ## Configure an instance
 
@@ -90,6 +91,10 @@ java -jar build/libs/directory-api.jar --directory.api.file=../sosuse-directory-
 Open `http://localhost:8080/swagger-ui.html`. The API defaults to the local Fuseki
 endpoint. Its download defaults to `./directory.ttl` unless overridden as above.
 
+GraphQL starts with the same API: open `http://localhost:8080/graphiql`.
+Start Fuseki first; the API derives its GraphQL schema from the federation metadata
+at startup. `./gradlew test` covers REST and GraphQL against an isolated Fuseki fixture.
+
 ```sh
 curl --get --data-urlencode 'query=SELECT (COUNT(*) AS ?triples) WHERE { ?s ?p ?o }' \
   -H 'Accept: application/sparql-results+json' http://localhost:3030/directory/sparql
@@ -97,7 +102,7 @@ curl --get --data-urlencode 'query=SELECT (COUNT(*) AS ?triples) WHERE { ?s ?p ?
 
 ## Image publication
 
-Pushes to `main` build, test and publish the amd64 image to
+Pushes to `main` build, test and publish the amd64 image
 `ghcr.io/foederierter-datenpool/directory-api`, tagged `main` and
 `sha-<full-commit-sha>`. Pull requests test without publishing. The workflow uses
 GitHub's automatic token. Make the container package **Public** after its first publication.
@@ -106,3 +111,38 @@ This generic image contains no instance data. Rebuild your instance after publis
 API changes or new pipeline output. To fix the API version, set the `API_IMAGE`
 build argument to an image digest. The example allows 512 MiB per container; larger
 datasets need measured resource budgets.
+
+## GraphQL
+
+The schema uses REST's shared collection metadata and data access.
+Each target schema becomes a root collection, with `id`, `limit` (1–100, default 50)
+and `offset` arguments. `id` is the full entity IRI. For example, in Sosuse:
+
+```graphql
+{
+  einrichtungSchema(limit: 5) {
+    id
+    name
+    address { postalCode addressLocality }
+  }
+}
+```
+
+Declared relationships become typed objects (unions for multiple target schemas).
+Ordinary values are lists of strings, missing fields are empty lists. The current
+configuration has no datatype/cardinality constraints, so nothing guesses numbers
+or singular values. Language tags and datatypes remain available through REST or
+SPARQL. Only IRI entities and relationships to declared, matching target classes
+are expanded. GraphiQL documents the generated names and their RDF predicates.
+Colliding field names receive a stable IRI-derived suffix. Restart the API after
+changing the federation configuration.
+
+Spring for GraphQL handles user queries, including variables, fragments and aliases.
+Request-scoped loaders batch entity reads through the same SPARQL methods as REST;
+no separate translator or service is needed. Pagination selects whole entities
+before fetching their fields. Queries are limited to depth 20; mutations and
+subscriptions are absent. GraphQL reads the default graph.
+
+GraphQL-LD is a different query convention, not another name for this endpoint.
+[GraphQL-LD clients](https://github.com/rubensworks/GraphQL-LD.js) can already use
+the public SPARQL endpoint with a JSON-LD context; no extra server is required.
