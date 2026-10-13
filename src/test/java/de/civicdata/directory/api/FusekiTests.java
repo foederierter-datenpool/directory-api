@@ -106,6 +106,54 @@ class FusekiTests {
                 .isInstanceOf(org.apache.jena.riot.RiotException.class);
     }
 
+    @Test
+    void reusesSnapshotAndReplacesChangedGraphsWithoutPublishingFailedImports() throws Exception {
+        Files.createDirectories(work.resolve("data"));
+        Files.createDirectories(work.resolve("config"));
+        Files.writeString(work.resolve("config/federation.ttl"), "<urn:config> <urn:name> \"Config\" .");
+        String original = "<urn:s> <urn:number> \"52.1234567890123456789\"^^<http://www.w3.org/2001/XMLSchema#decimal> .";
+        Files.writeString(work.resolve("data/directory.ttl"), original);
+        Files.writeString(work.resolve("data/extra.ttl"), "<urn:extra> <urn:name> \"Old\" .");
+        Path marker = work.resolve("data/.fuseki/snapshot.sha256");
+        var server = DirectoryFuseki.serve(work, 0).start();
+        try (var client = HttpClient.newHttpClient()) {
+            try {
+                String endpoint = "http://localhost:" + server.getPort() + "/directory/sparql";
+                assertThat(query(client, endpoint, "SELECT (STR(?n) AS ?value) WHERE { <urn:s> <urn:number> ?n }",
+                        "application/sparql-results+json").body()).contains("52.1234567890123456789");
+            } finally { server.stop(); }
+            var importedAt = Files.getLastModifiedTime(marker);
+            server = DirectoryFuseki.serve(work, 0).start();
+            try { assertThat(Files.getLastModifiedTime(marker)).isEqualTo(importedAt); }
+            finally { server.stop(); }
+
+            Files.writeString(work.resolve("data/directory.ttl"), "<urn:new> <urn:name> \"New\" .");
+            Files.writeString(work.resolve("data/zzz-invalid.ttl"), "Invalid Turtle");
+            assertThatThrownBy(() -> DirectoryFuseki.serve(work, 0))
+                    .isInstanceOf(org.apache.jena.riot.RiotException.class);
+            assertThat(Files.getLastModifiedTime(marker)).isEqualTo(importedAt);
+            Files.delete(work.resolve("data/zzz-invalid.ttl"));
+            Files.writeString(work.resolve("data/directory.ttl"), original);
+            server = DirectoryFuseki.serve(work, 0).start();
+            try {
+                String endpoint = "http://localhost:" + server.getPort() + "/directory/sparql";
+                assertThat(query(client, endpoint, "SELECT (STR(?n) AS ?value) WHERE { <urn:s> <urn:number> ?n }",
+                        "application/sparql-results+json").body()).contains("52.1234567890123456789");
+            } finally { server.stop(); }
+
+            Files.writeString(work.resolve("data/directory.ttl"), "<urn:new> <urn:name> \"New\" .");
+            Files.delete(work.resolve("data/extra.ttl"));
+            server = DirectoryFuseki.serve(work, 0).start();
+            try {
+                String endpoint = "http://localhost:" + server.getPort() + "/directory/sparql";
+                assertThat(query(client, endpoint, "SELECT * WHERE { ?s ?p ?o }",
+                        "application/sparql-results+json").body()).contains("urn:new").doesNotContain("52.1234567890123456789");
+                assertThat(query(client, endpoint, "SELECT DISTINCT ?g WHERE { GRAPH ?g { ?s ?p ?o } }",
+                        "application/sparql-results+json").body()).doesNotContain("extra.ttl");
+            } finally { server.stop(); }
+        }
+    }
+
     private HttpResponse<String> query(HttpClient client, String endpoint, String query, String accept) throws Exception {
         var request = HttpRequest.newBuilder(URI.create(endpoint + "?query=" + URLEncoder.encode(query, StandardCharsets.UTF_8)))
                 .header("Accept", accept).header("Origin", "https://example.org").timeout(Duration.ofSeconds(5)).build();

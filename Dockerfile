@@ -10,7 +10,9 @@ LABEL org.opencontainers.image.source="https://github.com/foederierter-datenpool
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --system --gid 10000 app \
-    && useradd --system --uid 10000 --gid 10000 --no-create-home app
+    && useradd --system --uid 10000 --gid 10000 --no-create-home app \
+    && mkdir -p /app/database \
+    && chown app:app /app/database
 
 WORKDIR /app
 COPY --from=build /build/build/libs/directory-api.jar ./app.jar

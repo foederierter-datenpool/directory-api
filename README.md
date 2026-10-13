@@ -22,10 +22,24 @@ those same files. Set `DIRECTORY_API_FILE=/app/snapshot/data/directory.ttl` for 
 API download. Rebuild to refresh the data; restarting reuses the image's snapshot.
 
 Both Compose and local execution run the same Java launcher, `directory-fuseki.jar`.
-At startup it loads Turtle files
-from `config/`, `data/`, `webapp/content/` and `webapp/exporters/` in place. It excludes
+It imports Turtle files into a disk-backed TDB2 database from
+`config/`, `data/`, `webapp/content/` and `webapp/exporters/`. It excludes
 raw, lifted, extracted and preparation artifacts, hidden files and symlinks. Missing
 optional directories are fine; spaces in graph names are URL-encoded.
+
+The database defaults to `data/.fuseki/` inside the snapshot directory. Set
+`DIRECTORY_FUSEKI_DATABASE` to use another writable directory. Compose stores it
+in the `fuseki-data` volume, with a 512 MB Java heap and a 1 GB container limit.
+File contents and paths identify each snapshot: unchanged snapshots reuse the
+database; changed snapshots replace its graphs in one transaction before serving
+queries. Failed imports prevent startup and retain the previous committed data.
+Turtle files remain unchanged and continue to supply the full download. TDB2 can
+normalize numeric spellings in query results, such as `007` to `7`.
+
+The first import needs disk space for indexes and time to build them. Compose
+allows 30 minutes before failed health checks count; startup completes as soon
+as Fuseki is ready. Subsequent restarts reuse the indexes. TDB2 also uses memory
+outside the Java heap for filesystem caching, so the container needs headroom.
 
 Only `data/directory.ttl` populates the default graph. Other included files become
 named graphs with uniform names: `data/pipeline/merged.ttl` becomes
@@ -48,7 +62,7 @@ Entities contain `id`, the full `iri`, `collection`, `href`, and `properties`.
 Property names use predicate final segments; colliding names use their full IRIs.
 Collection metadata maps every property name back to its predicate. Only declared
 target fields are returned; absent fields are omitted and all present fields are arrays.
-Literals preserve their lexical `value`, `datatype` and `language`; resources have
+Literals expose their `value`, `datatype` and `language` as returned by Fuseki; resources have
 an `iri` and links to matching collections. Blank nodes have snapshot-local IDs and
 are not expanded. For example, a name and an address reference look like:
 
@@ -109,8 +123,8 @@ GitHub's automatic token. Make the container package **Public** after its first 
 
 This generic image contains no instance data. Rebuild your instance after publishing
 API changes or new pipeline output. To fix the API version, set the `API_IMAGE`
-build argument to an image digest. The example allows 512 MiB per container; larger
-datasets need measured resource budgets.
+build argument to an image digest. The example allows 512 MiB for the API and 1 GiB
+for Fuseki; larger datasets need measured resource budgets.
 
 ## GraphQL
 

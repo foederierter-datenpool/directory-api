@@ -27,9 +27,21 @@ services:
     pull_policy: never
     entrypoint: ["java", "-jar", "/app/fuseki/directory-fuseki.jar"]
     command: ["/app/snapshot"]
-    mem_limit: 512m
+    environment:
+      DIRECTORY_FUSEKI_DATABASE: /app/database
+      JAVA_TOOL_OPTIONS: -Xmx512m
+    volumes:
+      - fuseki-data:/app/database
+    mem_limit: 1g
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "http://localhost:3030/directory/sparql?query=ASK%7B%7D"]
+      start_period: 30m
+      interval: 10s
+      timeout: 5s
+      retries: 6
     # ports:
     #   - "127.0.0.1:3030:3030"
+
+volumes:
+  fuseki-data:

@@ -40,6 +40,8 @@ dependencies {
 
 tasks.named('test') {
     useJUnitPlatform()
+    // Other tests can initialize Jena before the standalone launcher's defaults run.
+    systemProperty 'org.apache.jena.tdb.store.enableInlineLiterals', 'false'
 }
 
 tasks.named('bootJar') {
